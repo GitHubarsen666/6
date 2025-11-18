@@ -1,0 +1,219 @@
+// Таблиця користувачів системи (студенти, викладачі, адміністратори)
+Table users {
+  id int [pk, increment]
+  email varchar [unique, not null]
+  password_hash varchar [not null]
+  first_name varchar [not null]
+  last_name varchar [not null]
+  role enum [not null] // 'student', 'teacher', 'admin'
+  group_id int [ref: > groups.id]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  
+  indexes {
+    email [unique]
+  }
+}
+
+// Таблиця навчальних груп для студентів
+Table groups {
+  id int [pk, increment]
+  name varchar [not null]
+  description text
+  created_by int [ref: > users.id]
+  created_at timestamp [default: `now()`]
+}
+
+// Таблиця навчальних предметів
+Table subjects {
+  id int [pk, increment]
+  name varchar [not null]
+  description text
+  created_by int [ref: > users.id]
+  created_at timestamp [default: `now()`]
+}
+
+// Таблиця тем в межах предметів
+Table topics {
+  id int [pk, increment]
+  subject_id int [ref: > subjects.id, not null]
+  name varchar [not null]
+  description text
+  created_by int [ref: > users.id]
+  created_at timestamp [default: `now()`]
+}
+
+// Таблиця рівнів складності питань
+Table question_difficulty_levels {
+  id int [pk, increment]
+  name varchar [not null] // 'easy', 'medium', 'hard'
+  points int [not null]
+  description text
+}
+
+// Таблиця тестових питань
+Table questions {
+  id int [pk, increment]
+  topic_id int [ref: > topics.id, not null]
+  difficulty_level_id int [ref: > question_difficulty_levels.id, not null]
+  question_text text [not null]
+  question_type enum [not null] // 'single_choice', 'multiple_choice', 'open_answer'
+  author_id int [ref: > users.id, not null]
+  is_active boolean [default: true]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  
+  indexes {
+    (topic_id, difficulty_level_id)
+    author_id
+  }
+}
+
+// Таблиця варіантів відповідей до питань
+Table answers {
+  id int [pk, increment]
+  question_id int [ref: > questions.id, not null]
+  answer_text text [not null]
+  is_correct boolean [not null]
+  order_index int
+  created_at timestamp [default: `now()`]
+  
+  indexes {
+    question_id
+    (question_id, is_correct)
+  }
+}
+
+// Таблиця тестів
+Table tests {
+  id int [pk, increment]
+  name varchar [not null]
+  description text
+  subject_id int [ref: > subjects.id, not null]
+  created_by int [ref: > users.id, not null]
+  time_limit_minutes int
+  max_attempts int [default: 1]
+  is_active boolean [default: true]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  
+  indexes {
+    subject_id
+    created_by
+  }
+}
+
+// Таблиця звязку тестів з питаннями (багато-до-багатьох)
+Table test_questions {
+  id int [pk, increment]
+  test_id int [ref: > tests.id, not null]
+  question_id int [ref: > questions.id, not null]
+  order_index int [not null]
+  points int [not null]
+  created_at timestamp [default: `now()`]
+  
+  indexes {
+    test_id
+    question_id
+    (test_id, order_index) [unique]
+  }
+}
+
+// Таблиця сесій тестування користувачів
+Table test_sessions {
+  id int [pk, increment]
+  test_id int [ref: > tests.id, not null]
+  user_id int [ref: > users.id, not null]
+  started_at timestamp [not null]
+  completed_at timestamp
+  time_spent_seconds int
+  total_points int
+  max_possible_points int
+  score_percentage decimal(5,2)
+  status enum [not null] // 'in_progress', 'completed', 'expired'
+  created_at timestamp [default: `now()`]
+  
+  indexes {
+    user_id
+    test_id
+    (user_id, test_id)
+    (status, completed_at)
+  }
+}
+
+// Таблиця відповідей користувачів під час тестування
+Table user_answers {
+  id int [pk, increment]
+  test_session_id int [ref: > test_sessions.id, not null]
+  question_id int [ref: > questions.id, not null]
+  answer_id int [ref: > answers.id]
+  open_answer_text text
+  is_correct boolean
+  points_earned int
+  answered_at timestamp [default: `now()`]
+  
+  indexes {
+    test_session_id
+    question_id
+    (test_session_id, question_id) [unique]
+    answer_id
+  }
+}
+
+// Таблиця логування активності користувачів
+Table user_activity_logs {
+  id int [pk, increment]
+  user_id int [ref: > users.id, not null]
+  activity_type enum [not null] // 'login', 'test_started', 'test_completed', 'question_answered'
+  test_session_id int [ref: > test_sessions.id]
+  description text
+  ip_address varchar
+  user_agent text
+  created_at timestamp [default: `now()`]
+  
+  indexes {
+    user_id
+    (user_id, created_at)
+    activity_type
+    test_session_id
+  }
+}
+
+// Таблиця навчальних матеріалів бібліотеки
+Table learning_materials {
+  id int [pk, increment]
+  subject_id int [ref: > subjects.id, not null]
+  topic_id int [ref: > topics.id]
+  title varchar [not null]
+  content_type enum [not null] // 'text', 'pdf', 'video', 'presentation'
+  file_path varchar
+  content_text text
+  author_id int [ref: > users.id, not null]
+  is_active boolean [default: true]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  
+  indexes {
+    subject_id
+    topic_id
+    author_id
+    (subject_id, topic_id)
+  }
+}
+
+// Таблиця логування доступу до навчальних матеріалів
+Table material_access_logs {
+  id int [pk, increment]
+  user_id int [ref: > users.id, not null]
+  material_id int [ref: > learning_materials.id, not null]
+  access_type enum [not null] // 'view', 'download', 'print'
+  duration_seconds int
+  created_at timestamp [default: `now()`]
+  
+  indexes {
+    user_id
+    material_id
+    (user_id, material_id)
+    created_at
+  }
+}
